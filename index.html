@@ -242,6 +242,28 @@
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { background-color: #1a1a2e; color: #e0e0e0; }
+      header h1 { color: #e0e0e0; }
+      .card { background: #16213e; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+      .section-title { color: #999; }
+      .date-picker input[type="date"] { background: #1a1a2e; color: #e0e0e0; border-color: #333; }
+      .diary-text textarea { background: #1a1a2e; color: #e0e0e0; border-color: #333; }
+      .mood-btn span { color: #999; }
+      .mood-btn:hover { background: #1a1a3e; }
+      .mood-btn.active { border-color: #5B9BD5; background: #1a2a4e; }
+      .history-section h2 { color: #e0e0e0; }
+      .history-entry { background: #1a1a2e; }
+      .history-entry:hover { background: #0f3460; }
+      .history-entry .preview { color: #bbb; }
+      .toast { background: #e0e0e0; color: #1a1a2e; }
+    }
   </style>
 </head>
 <body>
@@ -351,12 +373,24 @@
       });
     }
 
+    function setLoading(btn, text) {
+      btn.disabled = true;
+      btn.dataset.origText = btn.textContent;
+      btn.textContent = text;
+    }
+
+    function clearLoading(btn) {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.origText;
+    }
+
     function saveEntry() {
       const dateStr = dateInput.value;
       if (!selectedMood && !diaryText.value.trim()) {
         showToast('请选择心情或写点什么');
         return;
       }
+      setLoading(saveBtn, '保存中...');
       const data = loadData();
       data[dateStr] = {
         mood: selectedMood,
@@ -364,8 +398,11 @@
         updatedAt: new Date().toISOString()
       };
       saveData(data);
-      showToast('保存成功！');
       renderList();
+      setTimeout(() => {
+        clearLoading(saveBtn);
+        showToast('保存成功！');
+      }, 300);
     }
 
     function deleteEntry() {
@@ -376,13 +413,26 @@
         return;
       }
       if (!confirm('确定要删除这天的记录吗？')) return;
+      setLoading(deleteBtn, '删除中...');
       delete data[dateStr];
       saveData(data);
       selectedMood = '';
       diaryText.value = '';
       updateMoodButtons();
-      showToast('已删除');
+      updateWordCount();
       renderList();
+      setTimeout(() => {
+        clearLoading(deleteBtn);
+        showToast('已删除');
+      }, 300);
+    }
+
+    function formatTime(isoStr) {
+      if (!isoStr) return '';
+      const d = new Date(isoStr);
+      const pad = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+        + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
 
     function renderList() {
@@ -394,11 +444,14 @@
       }
       historyList.innerHTML = dates.map(date => {
         const entry = data[date];
-        const preview = entry.text ? escapeHtml(entry.text) : '（无内容）';
+        const raw = entry.text || '';
+        const trimmed = raw.length > 50 ? raw.slice(0, 50) + '...' : raw;
+        const preview = trimmed ? escapeHtml(trimmed) : '（无内容）';
+        const time = formatTime(entry.updatedAt);
         return `<div class="history-entry" data-date="${date}">
           <div class="mood">${entry.mood || '📝'}</div>
           <div class="info">
-            <div class="date">${date}</div>
+            <div class="date">${date}${time ? ' · 编辑于 ' + time : ''}</div>
             <div class="preview">${preview}</div>
           </div>
         </div>`;
