@@ -174,6 +174,53 @@
       margin-bottom: 14px;
     }
 
+    .search-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #333;
+      background: #fafafa;
+      outline: none;
+      font-family: inherit;
+      margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: #5B9BD5;
+    }
+
+    .mood-filter {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      background: #fafafa;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: inherit;
+      color: #555;
+      transition: all 0.2s;
+    }
+
+    .filter-btn:hover {
+      background: #f0f7ff;
+    }
+
+    .filter-btn.active {
+      background: #5B9BD5;
+      color: #fff;
+      border-color: #5B9BD5;
+    }
+
     .history-empty {
       text-align: center;
       color: #aaa;
@@ -261,6 +308,10 @@
       .history-section h2 { color: #e0e0e0; }
       .history-entry { background: #1a1a2e; }
       .history-entry:hover { background: #0f3460; }
+      .search-input { background: #1a1a2e; color: #e0e0e0; border-color: #333; }
+      .filter-btn { background: #1a1a2e; color: #bbb; border-color: #333; }
+      .filter-btn:hover { background: #1a1a3e; }
+      .filter-btn.active { background: #5B9BD5; color: #fff; border-color: #5B9BD5; }
       .history-entry .preview { color: #bbb; }
       .toast { background: #e0e0e0; color: #1a1a2e; }
     }
@@ -302,6 +353,15 @@
 
     <div class="card history-section">
       <h2>📖 历史记录</h2>
+      <input type="text" class="search-input" id="searchInput" placeholder="搜索日期、内容关键词...">
+      <div class="mood-filter" id="moodFilter">
+        <button class="filter-btn active" data-mood="">全部</button>
+        <button class="filter-btn" data-mood="😄">😄</button>
+        <button class="filter-btn" data-mood="😊">😊</button>
+        <button class="filter-btn" data-mood="😐">😐</button>
+        <button class="filter-btn" data-mood="😢">😢</button>
+        <button class="filter-btn" data-mood="😡">😡</button>
+      </div>
       <div id="historyList"></div>
     </div>
   </div>
@@ -318,8 +378,12 @@
     const historyList = document.getElementById('historyList');
     const toastEl = document.getElementById('toast');
     const wordCountEl = document.getElementById('wordCount');
+    const searchInput = document.getElementById('searchInput');
+    const moodFilter = document.getElementById('moodFilter');
+    const filterBtns = moodFilter.querySelectorAll('.filter-btn');
 
     let selectedMood = '';
+    let filterMood = '';
 
     function updateWordCount() {
       const len = diaryText.value.replace(/\s/g, '').length;
@@ -437,9 +501,22 @@
 
     function renderList() {
       const data = loadData();
-      const dates = Object.keys(data).sort().reverse();
-      if (dates.length === 0) {
+      const keyword = searchInput.value.trim().toLowerCase();
+      const dates = Object.keys(data).sort().reverse().filter(date => {
+        const entry = data[date];
+        if (filterMood && entry.mood !== filterMood) return false;
+        if (keyword) {
+          const haystack = (date + ' ' + (entry.text || '') + ' ' + (entry.mood || '')).toLowerCase();
+          if (!haystack.includes(keyword)) return false;
+        }
+        return true;
+      });
+      if (Object.keys(data).length === 0) {
         historyList.innerHTML = '<div class="history-empty">还没有记录，开始写下你的第一篇日记吧！</div>';
+        return;
+      }
+      if (dates.length === 0) {
+        historyList.innerHTML = '<div class="history-empty">没有找到匹配的记录</div>';
         return;
       }
       historyList.innerHTML = dates.map(date => {
@@ -473,6 +550,14 @@
     });
 
     diaryText.addEventListener('input', updateWordCount);
+    searchInput.addEventListener('input', renderList);
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterMood = btn.dataset.mood;
+        filterBtns.forEach(b => b.classList.toggle('active', b.dataset.mood === filterMood));
+        renderList();
+      });
+    });
     dateInput.addEventListener('change', () => loadEntry(dateInput.value));
     saveBtn.addEventListener('click', saveEntry);
     deleteBtn.addEventListener('click', deleteEntry);
