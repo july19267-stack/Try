@@ -136,6 +136,98 @@
       margin-top: 6px;
     }
 
+    .tag-selector {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+
+    .tag-btn {
+      padding: 5px 12px;
+      border: 1px solid #ddd;
+      border-radius: 16px;
+      background: #fafafa;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      color: #555;
+      transition: all 0.2s;
+    }
+
+    .tag-btn:hover { background: #f0f7ff; }
+
+    .tag-btn.active {
+      background: #e8f2fc;
+      color: #2c7be5;
+      border-color: #5B9BD5;
+    }
+
+    .tag-btn.remove-custom {
+      position: relative;
+      padding-right: 24px;
+    }
+
+    .tag-btn.remove-custom::after {
+      content: '\00d7';
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      color: #999;
+    }
+
+    .tag-btn.remove-custom:hover::after { color: #e57373; }
+
+    .custom-tag-input {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .custom-tag-input input {
+      width: 80px;
+      padding: 5px 10px;
+      border: 1px solid #ddd;
+      border-radius: 16px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      background: #fafafa;
+      color: #333;
+      transition: border-color 0.2s;
+    }
+
+    .custom-tag-input input:focus { border-color: #5B9BD5; }
+
+    .custom-tag-input button {
+      padding: 5px 10px;
+      border: 1px solid #5B9BD5;
+      border-radius: 16px;
+      background: #5B9BD5;
+      color: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .entry-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .entry-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #e8f2fc;
+      color: #2c7be5;
+    }
+
     .actions {
       display: flex;
       gap: 12px;
@@ -312,6 +404,11 @@
       .filter-btn { background: #1a1a2e; color: #bbb; border-color: #333; }
       .filter-btn:hover { background: #1a1a3e; }
       .filter-btn.active { background: #5B9BD5; color: #fff; border-color: #5B9BD5; }
+      .tag-btn { background: #1a1a2e; color: #bbb; border-color: #333; }
+      .tag-btn:hover { background: #1a1a3e; }
+      .tag-btn.active { background: #1a2a4e; color: #7ab8f5; border-color: #5B9BD5; }
+      .custom-tag-input input { background: #1a1a2e; color: #e0e0e0; border-color: #333; }
+      .entry-tag { background: #1a2a4e; color: #7ab8f5; }
       .history-entry .preview { color: #bbb; }
       .toast { background: #e0e0e0; color: #1a1a2e; }
     }
@@ -339,6 +436,9 @@
         <button class="mood-btn" data-mood="😡">😡<span>生气</span></button>
       </div>
 
+      <div class="section-title">标签</div>
+      <div class="tag-selector" id="tagSelector"></div>
+
       <div class="diary-text">
         <div class="section-title">日记内容</div>
         <textarea id="diaryText" placeholder="写下今天的心情..."></textarea>
@@ -362,6 +462,8 @@
         <button class="filter-btn" data-mood="😢">😢</button>
         <button class="filter-btn" data-mood="😡">😡</button>
       </div>
+      <div class="section-title">按标签筛选</div>
+      <div class="tag-selector" id="tagFilter"></div>
       <div id="historyList"></div>
     </div>
   </div>
@@ -382,8 +484,15 @@
     const moodFilter = document.getElementById('moodFilter');
     const filterBtns = moodFilter.querySelectorAll('.filter-btn');
 
+    const tagSelector = document.getElementById('tagSelector');
+    const tagFilterEl = document.getElementById('tagFilter');
+
+    const PRESET_TAGS = ['工作', '生活', '学习', '情感'];
+
     let selectedMood = '';
     let filterMood = '';
+    let selectedTags = [];
+    let filterTag = '';
 
     function updateWordCount() {
       const len = diaryText.value.replace(/\s/g, '').length;
@@ -392,6 +501,89 @@
 
     function escapeHtml(str) {
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function getCustomTags() {
+      try { return JSON.parse(localStorage.getItem('moodDiaryTags')) || []; }
+      catch { return []; }
+    }
+
+    function saveCustomTags(tags) {
+      localStorage.setItem('moodDiaryTags', JSON.stringify(tags));
+    }
+
+    function getAllTags() {
+      return [...PRESET_TAGS, ...getCustomTags()];
+    }
+
+    function renderTagSelector() {
+      const tags = getAllTags();
+      const customTags = getCustomTags();
+      tagSelector.innerHTML = tags.map(tag => {
+        const isActive = selectedTags.includes(tag);
+        const isCustom = customTags.includes(tag);
+        return `<button class="tag-btn${isActive ? ' active' : ''}${isCustom ? ' remove-custom' : ''}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`;
+      }).join('') +
+        `<div class="custom-tag-input">
+          <input type="text" id="customTagInput" placeholder="自定义" maxlength="10">
+          <button id="addCustomTag">+</button>
+        </div>`;
+
+      tagSelector.querySelectorAll('.tag-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const tag = btn.dataset.tag;
+          const isCustom = customTags.includes(tag);
+          if (isCustom && e.target === btn && e.offsetX > btn.offsetWidth - 24) {
+            if (confirm('删除自定义标签「' + tag + '」？')) {
+              saveCustomTags(customTags.filter(t => t !== tag));
+              selectedTags = selectedTags.filter(t => t !== tag);
+              renderTagSelector();
+              renderTagFilter();
+              renderList();
+            }
+            return;
+          }
+          if (selectedTags.includes(tag)) {
+            selectedTags = selectedTags.filter(t => t !== tag);
+          } else {
+            selectedTags.push(tag);
+          }
+          btn.classList.toggle('active');
+        });
+      });
+
+      const addBtn = document.getElementById('addCustomTag');
+      const input = document.getElementById('customTagInput');
+      addBtn.addEventListener('click', () => addCustomTag(input));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCustomTag(input); });
+    }
+
+    function addCustomTag(input) {
+      const tag = input.value.trim();
+      if (!tag) return;
+      const all = getAllTags();
+      if (all.includes(tag)) { showToast('标签已存在'); return; }
+      const custom = getCustomTags();
+      custom.push(tag);
+      saveCustomTags(custom);
+      selectedTags.push(tag);
+      renderTagSelector();
+      renderTagFilter();
+    }
+
+    function renderTagFilter() {
+      const allTags = getAllTags();
+      tagFilterEl.innerHTML = `<button class="tag-btn${!filterTag ? ' active' : ''}" data-tag="">全部</button>` +
+        allTags.map(tag =>
+          `<button class="tag-btn${filterTag === tag ? ' active' : ''}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`
+        ).join('');
+      tagFilterEl.querySelectorAll('.tag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          filterTag = btn.dataset.tag;
+          tagFilterEl.querySelectorAll('.tag-btn').forEach(b => b.classList.toggle('active', b.dataset.tag === filterTag));
+          renderList();
+        });
+      });
     }
 
     function getToday() {
@@ -423,12 +615,15 @@
       if (entry) {
         selectedMood = entry.mood || '';
         diaryText.value = entry.text || '';
+        selectedTags = entry.tags ? [...entry.tags] : [];
       } else {
         selectedMood = '';
         diaryText.value = '';
+        selectedTags = [];
       }
       updateMoodButtons();
       updateWordCount();
+      renderTagSelector();
     }
 
     function updateMoodButtons() {
@@ -459,6 +654,7 @@
       data[dateStr] = {
         mood: selectedMood,
         text: diaryText.value.trim(),
+        tags: [...selectedTags],
         updatedAt: new Date().toISOString()
       };
       saveData(data);
@@ -482,8 +678,10 @@
       saveData(data);
       selectedMood = '';
       diaryText.value = '';
+      selectedTags = [];
       updateMoodButtons();
       updateWordCount();
+      renderTagSelector();
       renderList();
       setTimeout(() => {
         clearLoading(deleteBtn);
@@ -505,8 +703,9 @@
       const dates = Object.keys(data).sort().reverse().filter(date => {
         const entry = data[date];
         if (filterMood && entry.mood !== filterMood) return false;
+        if (filterTag && !(entry.tags || []).includes(filterTag)) return false;
         if (keyword) {
-          const haystack = (date + ' ' + (entry.text || '') + ' ' + (entry.mood || '')).toLowerCase();
+          const haystack = (date + ' ' + (entry.text || '') + ' ' + (entry.mood || '') + ' ' + (entry.tags || []).join(' ')).toLowerCase();
           if (!haystack.includes(keyword)) return false;
         }
         return true;
@@ -530,6 +729,7 @@
           <div class="info">
             <div class="date">${date}${time ? ' · 编辑于 ' + time : ''}</div>
             <div class="preview">${preview}</div>
+            ${(entry.tags && entry.tags.length) ? '<div class="entry-tags">' + entry.tags.map(t => '<span class="entry-tag">' + escapeHtml(t) + '</span>').join('') + '</div>' : ''}
           </div>
         </div>`;
       }).join('');
@@ -576,6 +776,7 @@
     dateInput.value = today;
     dateInput.max = today;
     loadEntry(today);
+    renderTagFilter();
     renderList();
   </script>
 </body>
