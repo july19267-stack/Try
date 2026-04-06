@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>心情日记</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background-color: #f0f2f5;
+      color: #333;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 640px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    header h1 {
+      font-size: 28px;
+      color: #2c3e50;
+    }
+
+    header p {
+      font-size: 14px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+
+    .date-picker {
+      margin-bottom: 20px;
+    }
+
+    .date-picker input[type="date"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      color: #333;
+      background: #fafafa;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .date-picker input[type="date"]:focus {
+      border-color: #5B9BD5;
+    }
+
+    .mood-selector {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+    }
+
+    .mood-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 32px;
+    }
+
+    .mood-btn span {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .mood-btn:hover {
+      background: #f0f7ff;
+    }
+
+    .mood-btn.active {
+      border-color: #5B9BD5;
+      background: #e8f2fc;
+      transform: scale(1.1);
+    }
+
+    .diary-text textarea {
+      width: 100%;
+      min-height: 150px;
+      padding: 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      font-family: inherit;
+      background: #fafafa;
+      transition: border-color 0.2s;
+    }
+
+    .diary-text textarea:focus {
+      border-color: #5B9BD5;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      font-family: inherit;
+    }
+
+    .btn:hover {
+      opacity: 0.85;
+    }
+
+    .btn-save {
+      background: #4CAF50;
+      color: #fff;
+    }
+
+    .btn-delete {
+      background: #e57373;
+      color: #fff;
+      flex: 0.5;
+    }
+
+    .history-section h2 {
+      font-size: 18px;
+      color: #2c3e50;
+      margin-bottom: 14px;
+    }
+
+    .history-empty {
+      text-align: center;
+      color: #aaa;
+      padding: 30px 0;
+      font-size: 14px;
+    }
+
+    .history-entry {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px;
+      background: #fafafa;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .history-entry:hover {
+      background: #f0f2f5;
+    }
+
+    .history-entry .mood {
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .history-entry .info {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .history-entry .date {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .history-entry .preview {
+      font-size: 14px;
+      color: #555;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: #333;
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📔 心情日记</h1>
+      <p>记录每一天的心情</p>
+    </header>
+
+    <div class="card">
+      <div class="date-picker">
+        <div class="section-title">日期</div>
+        <input type="date" id="dateInput">
+      </div>
+
+      <div class="section-title">今天的心情</div>
+      <div class="mood-selector" id="moodSelector">
+        <button class="mood-btn" data-mood="😄">😄<span>开心</span></button>
+        <button class="mood-btn" data-mood="😊">😊<span>不错</span></button>
+        <button class="mood-btn" data-mood="😐">😐<span>一般</span></button>
+        <button class="mood-btn" data-mood="😢">😢<span>难过</span></button>
+        <button class="mood-btn" data-mood="😡">😡<span>生气</span></button>
+      </div>
+
+      <div class="diary-text">
+        <div class="section-title">日记内容</div>
+        <textarea id="diaryText" placeholder="写下今天的心情..."></textarea>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-save" id="saveBtn">保存</button>
+        <button class="btn btn-delete" id="deleteBtn">删除</button>
+      </div>
+    </div>
+
+    <div class="card history-section">
+      <h2>📖 历史记录</h2>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const dateInput = document.getElementById('dateInput');
+    const moodSelector = document.getElementById('moodSelector');
+    const moodBtns = moodSelector.querySelectorAll('.mood-btn');
+    const diaryText = document.getElementById('diaryText');
+    const saveBtn = document.getElementById('saveBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const historyList = document.getElementById('historyList');
+    const toastEl = document.getElementById('toast');
+
+    let selectedMood = '';
+
+    function getToday() {
+      const d = new Date();
+      return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
+    }
+
+    function loadData() {
+      try {
+        return JSON.parse(localStorage.getItem('moodDiary')) || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveData(data) {
+      try {
+        localStorage.setItem('moodDiary', JSON.stringify(data));
+      } catch {
+        showToast('存储空间不足，无法保存');
+      }
+    }
+
+    function loadEntry(dateStr) {
+      const data = loadData();
+      const entry = data[dateStr];
+      if (entry) {
+        selectedMood = entry.mood || '';
+        diaryText.value = entry.text || '';
+      } else {
+        selectedMood = '';
+        diaryText.value = '';
+      }
+      updateMoodButtons();
+    }
+
+    function updateMoodButtons() {
+      moodBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mood === selectedMood);
+      });
+    }
+
+    function saveEntry() {
+      const dateStr = dateInput.value;
+      if (!selectedMood && !diaryText.value.trim()) {
+        showToast('请选择心情或写点什么');
+        return;
+      }
+      const data = loadData();
+      data[dateStr] = {
+        mood: selectedMood,
+        text: diaryText.value.trim(),
+        updatedAt: new Date().toISOString()
+      };
+      saveData(data);
+      showToast('保存成功！');
+      renderList();
+    }
+
+    function deleteEntry() {
+      const dateStr = dateInput.value;
+      const data = loadData();
+      if (!data[dateStr]) {
+        showToast('当天没有记录');
+        return;
+      }
+      if (!confirm('确定要删除这天的记录吗？')) return;
+      delete data[dateStr];
+      saveData(data);
+      selectedMood = '';
+      diaryText.value = '';
+      updateMoodButtons();
+      showToast('已删除');
+      renderList();
+    }
+
+    function renderList() {
+      const data = loadData();
+      const dates = Object.keys(data).sort().reverse();
+      if (dates.length === 0) {
+        historyList.innerHTML = '<div class="history-empty">还没有记录，开始写下你的第一篇日记吧！</div>';
+        return;
+      }
+      historyList.innerHTML = dates.map(date => {
+        const entry = data[date];
+        const preview = entry.text || '（无内容）';
+        return `<div class="history-entry" data-date="${date}">
+          <div class="mood">${entry.mood || '📝'}</div>
+          <div class="info">
+            <div class="date">${date}</div>
+            <div class="preview">${preview}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 2000);
+    }
+
+    // Event listeners
+    moodBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedMood = btn.dataset.mood === selectedMood ? '' : btn.dataset.mood;
+        updateMoodButtons();
+      });
+    });
+
+    dateInput.addEventListener('change', () => loadEntry(dateInput.value));
+    saveBtn.addEventListener('click', saveEntry);
+    deleteBtn.addEventListener('click', deleteEntry);
+
+    historyList.addEventListener('click', (e) => {
+      const entry = e.target.closest('.history-entry');
+      if (entry) {
+        dateInput.value = entry.dataset.date;
+        loadEntry(entry.dataset.date);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+
+    // Init
+    const today = getToday();
+    dateInput.value = today;
+    dateInput.max = today;
+    loadEntry(today);
+    renderList();
+  </script>
+</body>
+</html>
