@@ -387,6 +387,117 @@
       cursor: not-allowed;
     }
 
+    .stats-section h2 {
+      font-size: 18px;
+      color: #2c3e50;
+      margin-bottom: 14px;
+    }
+
+    .period-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      background: #f0f2f5;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .period-tab {
+      flex: 1;
+      padding: 8px 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: inherit;
+      color: #888;
+      transition: all 0.2s;
+    }
+
+    .period-tab.active {
+      background: #5B9BD5;
+      color: #fff;
+    }
+
+    .stats-subtitle {
+      font-size: 15px;
+      font-weight: bold;
+      color: #2c3e50;
+      margin-bottom: 12px;
+    }
+
+    .stats-empty {
+      text-align: center;
+      color: #aaa;
+      padding: 20px 0;
+      font-size: 14px;
+    }
+
+    .mood-dist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .mood-dist-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 45%;
+      min-width: 0;
+      background: #fafafa;
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+
+    .mood-dist-item .emoji {
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .mood-dist-item .bar-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .mood-dist-item .label {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 4px;
+    }
+
+    .mood-dist-item .bar-bg {
+      height: 8px;
+      background: #eee;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .mood-dist-item .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    .mood-dist-item .count {
+      font-size: 13px;
+      font-weight: bold;
+      color: #555;
+      margin-left: 8px;
+      flex-shrink: 0;
+    }
+
+    .trend-canvas-wrap {
+      position: relative;
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .trend-canvas-wrap canvas {
+      display: block;
+    }
+
     @media (prefers-color-scheme: dark) {
       body { background-color: #1a1a2e; color: #e0e0e0; }
       header h1 { color: #e0e0e0; }
@@ -410,6 +521,14 @@
       .custom-tag-input input { background: #1a1a2e; color: #e0e0e0; border-color: #333; }
       .entry-tag { background: #1a2a4e; color: #7ab8f5; }
       .history-entry .preview { color: #bbb; }
+      .stats-section h2 { color: #e0e0e0; }
+      .stats-subtitle { color: #e0e0e0; }
+      .period-tabs { background: #1a1a2e; }
+      .period-tab { color: #999; }
+      .period-tab.active { background: #5B9BD5; color: #fff; }
+      .mood-dist-item { background: #1a1a2e; }
+      .mood-dist-item .bar-bg { background: #333; }
+      .mood-dist-item .count { color: #ccc; }
       .toast { background: #e0e0e0; color: #1a1a2e; }
     }
   </style>
@@ -448,6 +567,21 @@
       <div class="actions">
         <button class="btn btn-save" id="saveBtn">保存</button>
         <button class="btn btn-delete" id="deleteBtn">删除</button>
+      </div>
+    </div>
+
+    <div class="card stats-section">
+      <h2>📊 心情统计</h2>
+      <div class="period-tabs" id="periodTabs">
+        <button class="period-tab" data-period="week">本周</button>
+        <button class="period-tab active" data-period="month">本月</button>
+        <button class="period-tab" data-period="year">本年</button>
+      </div>
+      <div class="stats-subtitle">心情分布</div>
+      <div class="mood-dist" id="moodDist"></div>
+      <div class="stats-subtitle">心情趋势</div>
+      <div class="trend-canvas-wrap">
+        <canvas id="trendCanvas"></canvas>
       </div>
     </div>
 
@@ -659,6 +793,7 @@
       };
       saveData(data);
       renderList();
+      renderStats();
       setTimeout(() => {
         clearLoading(saveBtn);
         showToast('保存成功！');
@@ -683,6 +818,7 @@
       updateWordCount();
       renderTagSelector();
       renderList();
+      renderStats();
       setTimeout(() => {
         clearLoading(deleteBtn);
         showToast('已删除');
@@ -735,6 +871,196 @@
       }).join('');
     }
 
+    // === Stats ===
+    const MOODS = ['😄','😊','😐','😢','😡'];
+    const MOOD_LABELS = {'😄':'开心','😊':'不错','😐':'一般','😢':'难过','😡':'生气'};
+    const MOOD_COLORS = {'😄':'#FFB347','😊':'#87CEEB','😐':'#9ACD32','😢':'#6CA0DC','😡':'#E57373'};
+    const MOOD_SCORES = {'😄':5,'😊':4,'😐':3,'😢':2,'😡':1};
+    let statsPeriod = 'month';
+
+    function getDateRange(period) {
+      const now = new Date();
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let start;
+      if (period === 'week') {
+        const day = end.getDay() || 7;
+        start = new Date(end);
+        start.setDate(end.getDate() - day + 1);
+      } else if (period === 'month') {
+        start = new Date(end.getFullYear(), end.getMonth(), 1);
+      } else {
+        start = new Date(end.getFullYear(), 0, 1);
+      }
+      return { start, end };
+    }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function toDateStr(d) {
+      return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
+    }
+
+    function getStatsEntries(period) {
+      const data = loadData();
+      const { start, end } = getDateRange(period);
+      const entries = [];
+      const cur = new Date(start);
+      while (cur <= end) {
+        const ds = toDateStr(cur);
+        if (data[ds]) entries.push({ date: ds, ...data[ds] });
+        cur.setDate(cur.getDate() + 1);
+      }
+      return entries;
+    }
+
+    function renderMoodDist(entries) {
+      const distEl = document.getElementById('moodDist');
+      if (entries.length === 0) {
+        distEl.innerHTML = '<div class="stats-empty">该时段暂无记录</div>';
+        return;
+      }
+      const counts = {};
+      MOODS.forEach(m => counts[m] = 0);
+      entries.forEach(e => { if (e.mood && counts[e.mood] !== undefined) counts[e.mood]++; });
+      const max = Math.max(...Object.values(counts), 1);
+      distEl.innerHTML = MOODS.map(m => {
+        const pct = Math.round(counts[m] / max * 100);
+        return `<div class="mood-dist-item">
+          <div class="emoji">${m}</div>
+          <div class="bar-wrap">
+            <div class="label">${MOOD_LABELS[m]}</div>
+            <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${MOOD_COLORS[m]}"></div></div>
+          </div>
+          <div class="count">${counts[m]}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderTrendChart(entries) {
+      const canvas = document.getElementById('trendCanvas');
+      const ctx = canvas.getContext('2d');
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      if (entries.length === 0) {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = 80;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#aaa';
+        ctx.font = '14px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('该时段暂无记录', canvas.width / 2, 45);
+        return;
+      }
+
+      const dpr = window.devicePixelRatio || 1;
+      const pointGap = 48;
+      const padL = 36, padR = 20, padT = 40, padB = 40;
+      const w = Math.max(padL + padR + (entries.length - 1) * pointGap + 20, canvas.parentElement.clientWidth);
+      const h = 220;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      const chartW = w - padL - padR;
+      const chartH = h - padT - padB;
+      const textColor = isDark ? '#999' : '#aaa';
+      const gridColor = isDark ? '#2a2a4e' : '#f0f0f0';
+
+      // Y-axis grid & labels
+      ctx.textAlign = 'center';
+      ctx.font = '16px serif';
+      for (let i = 1; i <= 5; i++) {
+        const y = padT + chartH - (i - 1) / 4 * chartH;
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(w - padR, y);
+        ctx.stroke();
+        const emoji = MOODS[5 - i]; // 5=😄 at top, 1=😡 at bottom
+        ctx.fillText(emoji, 16, y + 6);
+      }
+
+      // Points & line
+      const points = entries.map((e, i) => {
+        const x = padL + (entries.length === 1 ? chartW / 2 : i / (entries.length - 1) * chartW);
+        const score = MOOD_SCORES[e.mood] || 3;
+        const y = padT + chartH - (score - 1) / 4 * chartH;
+        return { x, y, mood: e.mood, date: e.date };
+      });
+
+      // Smooth curve
+      ctx.beginPath();
+      ctx.strokeStyle = '#5B9BD5';
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      if (points.length === 1) {
+        ctx.arc(points[0].x, points[0].y, 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          const prev = points[i - 1];
+          const cur = points[i];
+          const cpx = (prev.x + cur.x) / 2;
+          ctx.bezierCurveTo(cpx, prev.y, cpx, cur.y, cur.x, cur.y);
+        }
+        ctx.stroke();
+      }
+
+      // Gradient fill under curve
+      if (points.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          const prev = points[i - 1];
+          const cur = points[i];
+          const cpx = (prev.x + cur.x) / 2;
+          ctx.bezierCurveTo(cpx, prev.y, cpx, cur.y, cur.x, cur.y);
+        }
+        ctx.lineTo(points[points.length - 1].x, padT + chartH);
+        ctx.lineTo(points[0].x, padT + chartH);
+        ctx.closePath();
+        const grad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+        grad.addColorStop(0, isDark ? 'rgba(91,155,213,0.25)' : 'rgba(91,155,213,0.15)');
+        grad.addColorStop(1, isDark ? 'rgba(91,155,213,0)' : 'rgba(91,155,213,0)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+
+      // Dots
+      points.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = MOOD_COLORS[p.mood] || '#5B9BD5';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+
+      // X-axis date labels
+      ctx.fillStyle = textColor;
+      ctx.font = '11px serif';
+      ctx.textAlign = 'center';
+      const maxLabels = Math.floor(chartW / 56);
+      const step = Math.max(1, Math.ceil(points.length / maxLabels));
+      points.forEach((p, i) => {
+        if (i % step === 0 || i === points.length - 1) {
+          ctx.fillText(p.date.slice(5), p.x, h - 10);
+        }
+      });
+    }
+
+    function renderStats() {
+      const entries = getStatsEntries(statsPeriod);
+      renderMoodDist(entries);
+      renderTrendChart(entries);
+    }
+
     function showToast(msg) {
       toastEl.textContent = msg;
       toastEl.classList.add('show');
@@ -747,6 +1073,14 @@
         selectedMood = btn.dataset.mood === selectedMood ? '' : btn.dataset.mood;
         updateMoodButtons();
       });
+    });
+
+    document.getElementById('periodTabs').addEventListener('click', (e) => {
+      const tab = e.target.closest('.period-tab');
+      if (!tab) return;
+      statsPeriod = tab.dataset.period;
+      document.querySelectorAll('.period-tab').forEach(t => t.classList.toggle('active', t.dataset.period === statsPeriod));
+      renderStats();
     });
 
     diaryText.addEventListener('input', updateWordCount);
@@ -778,6 +1112,7 @@
     loadEntry(today);
     renderTagFilter();
     renderList();
+    renderStats();
   </script>
 </body>
 </html>
